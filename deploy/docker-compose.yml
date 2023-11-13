@@ -1,0 +1,59 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
+      target: prod
+    image: acount_management_service:${ACOUNT_MANAGEMENT_SERVICE_VERSION:-latest}
+    restart: always
+    env_file:
+    - .env
+    labels:
+      # Enables traefik for this container.
+    - traefik.enable=true
+    - traefik.http.routers.acount_management_service.rule=Host(`${ACOUNT_MANAGEMENT_SERVICE_TRAEFIK_HOST:-acount_management_service.localhost}`)
+    - traefik.http.routers.acount_management_service.entrypoints=http
+    - traefik.http.routers.acount_management_service.service=acount_management_service
+    - traefik.http.services.acount_management_service.loadbalancer.server.port=${ACOUNT_MANAGEMENT_SERVICE_PORT:-8000}
+    networks:
+    - default
+    - traefik-shared
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ACOUNT_MANAGEMENT_SERVICE_HOST: 0.0.0.0
+      ACOUNT_MANAGEMENT_SERVICE_DB_HOST: acount_management_service-db
+      ACOUNT_MANAGEMENT_SERVICE_DB_PORT: 5432
+      ACOUNT_MANAGEMENT_SERVICE_DB_USER: acount_management_service
+      ACOUNT_MANAGEMENT_SERVICE_DB_PASS: acount_management_service
+      ACOUNT_MANAGEMENT_SERVICE_DB_BASE: acount_management_service
+
+  db:
+    image: postgres:13.8-bullseye
+    hostname: acount_management_service-db
+    environment:
+      POSTGRES_PASSWORD: "acount_management_service"
+      POSTGRES_USER: "acount_management_service"
+      POSTGRES_DB: "acount_management_service"
+    volumes:
+    - acount_management_service-db-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: pg_isready -U acount_management_service
+      interval: 2s
+      timeout: 3s
+      retries: 40
+
+
+
+volumes:
+  acount_management_service-db-data:
+    name: acount_management_service-db-data
+
+networks:
+  # Network for traefik.
+  traefik-shared:
+    name: traefik-shared
